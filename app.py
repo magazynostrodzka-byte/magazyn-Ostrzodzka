@@ -36,7 +36,7 @@ LISTA_DOSTAWCOW = ["Dostawa Zewnętrzna", "Przesunięcie z innej budowy"]
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465
 SENDER_EMAIL = "magazyn.ostrodzka@gmail.com"
-SENDER_PASSWORD = "wpisz_tutaj_haslo_aplikacji"
+SENDER_PASSWORD = "xbjv onpy kzqk ldvi"
 
 st.set_page_config(page_title="Magazyn Budowlany", page_icon="🏗️", layout="wide")
 
