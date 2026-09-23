@@ -5,4 +5,3 @@ reportlab
 pillow
 streamlit-drawable-canvas
 streamlit-gsheets
-gspread
