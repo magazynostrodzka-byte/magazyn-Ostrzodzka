@@ -4,4 +4,5 @@ openpyxl
 reportlab
 pillow
 streamlit-drawable-canvas
-requests
+gspread
+google-auth
