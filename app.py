@@ -185,17 +185,17 @@ def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_byte
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=50, leftMargin=50, topMargin=40, bottomMargin=70)
     story, styles = [], getSampleStyleSheet()
     
-  try:
+    try:
         pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
         pdfmetrics.registerFont(TTFont('DejaVu-Bold', 'DejaVuSans-Bold.ttf'))
         pdfmetrics.registerFont(TTFont('DejaVu-BoldOblique', 'DejaVuSans-BoldOblique.ttf'))
         FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'DejaVu', 'DejaVu-Bold', 'DejaVu-BoldOblique'
-    except:
+    except Exception:
         try:
             pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
             pdfmetrics.registerFont(TTFont('Arial-Bold', 'arialbd.ttf'))
             FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'Arial', 'Arial-Bold', 'Arial-BoldItalic'
-        except:
+        except Exception:
             FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'Helvetica', 'Helvetica-Bold', 'Helvetica-BoldOblique'
     
     style_normal = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontName=FONT_NORMAL, fontSize=10, leading=14)
