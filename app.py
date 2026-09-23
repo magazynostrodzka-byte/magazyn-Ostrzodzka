@@ -4,8 +4,9 @@ import smtplib
 from email.message import EmailMessage
 from datetime import datetime
 import pandas as pd
-import requests
 import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 
@@ -20,9 +21,9 @@ from reportlab.pdfbase.ttfonts import TTFont
 # ==========================================
 # KONFIGURACJA BEZPIECZEŃSTWA I ID ARKUSZY
 # ==========================================
-HASLO_MAGAZYNU = "Magazyn2026!" # Hasło logowania
+HASLO_MAGAZYNU = "Magazyn2026!"
 
-# ID Arkuszy Google w Twojej kolejności:
+# ID Twoich 4 Arkuszy Google:
 # 1. korekty | 2. przyjazdy | 3. wyjazdy | 4. stan magazynowy
 ID_KOREKTY   = "1m6dcMFKH1aJxJRl114KQSXn5dXIfz-RZP8yd4999qvk"
 ID_PRZYJAZDY = "1QkP7shoHQVX2YBOmU_JIMO7LUN18z2055TdllrviQ0g"
@@ -36,22 +37,64 @@ LISTA_DOSTAWCOW = ["Dostawa Zewnętrzna", "Przesunięcie z innej budowy"]
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 465
 SENDER_EMAIL = "magazyn.ostrodzka@gmail.com"
-SENDER_PASSWORD = "xbjv onpy kzqk ldvi"
+SENDER_PASSWORD = "wpisz_tutaj_haslo_aplikacji"
 
 st.set_page_config(page_title="Magazyn Budowlany", page_icon="🏗️", layout="wide")
 
 FOLDER_ARCHIWUM = "ARCHIWUM_DOKUMENTOW"
 os.makedirs(FOLDER_ARCHIWUM, exist_ok=True)
 
-# Funkcja pobierająca dane bezpośrednio z Arkusza Google
+# Autoryzacja w Google Cloud za pomocą Secrets
+@st.cache_resource
+def get_gspread_client():
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    return gspread.authorize(credentials)
+
 def get_data_from_sheet(sheet_id):
-    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
     try:
-        df = pd.read_csv(url)
-        return df if df is not None else pd.DataFrame()
+        gc = get_gspread_client()
+        sh = gc.open_by_key(sheet_id)
+        worksheet = sh.get_worksheet(0)
+        data = worksheet.get_all_records()
+        return pd.DataFrame(data)
     except Exception as e:
-        st.error(f"Błąd odczytu z Google Sheets: {e}")
+        st.error(f"Błąd odczytu z Google Sheets ({sheet_id}): {e}")
         return pd.DataFrame()
+
+def save_data_to_sheet(sheet_id, df):
+    try:
+        gc = get_gspread_client()
+        sh = gc.open_by_key(sheet_id)
+        worksheet = sh.get_worksheet(0)
+        worksheet.clear()
+        
+        # Przygotowanie nagłówków i danych
+        df_clean = df.fillna("")
+        data_to_write = [df_clean.columns.values.tolist()] + df_clean.values.tolist()
+        worksheet.update('A1', data_to_write)
+    except Exception as e:
+        st.error(f"Błąd zapisu do Google Sheets ({sheet_id}): {e}")
+
+def wyslij_email_z_pdf(odbiorca_email, nazwa_pliku, pdf_bytes):
+    try:
+        if SENDER_PASSWORD == "wpisz_tutaj_haslo_aplikacji":
+            return False
+            
+        msg = EmailMessage()
+        msg['Subject'] = f"Kopia dokumentu: {nazwa_pliku}"
+        msg['From'] = SENDER_EMAIL
+        msg['To'] = odbiorca_email
+        msg.set_content(f"Cześć,\n\nW załączniku przesyłamy dokument wygenerowany w Systemie Magazynowym: {nazwa_pliku}.")
+        msg.add_attachment(pdf_bytes.getvalue(), maintype='application', subtype='pdf', filename=nazwa_pliku)
+        
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception:
+        return False
 
 def clean_code(val):
     if pd.isna(val): return ""
@@ -67,7 +110,7 @@ def is_x_value(val):
 # ==========================================
 # PRECYZYJNE PRZELICZANIE STANU
 # ==========================================
-def oblicz_aktualny_stan():
+def oblicz_i_zapisz_aktualny_stan():
     df_pz = get_data_from_sheet(ID_PRZYJAZDY)
     df_wz = get_data_from_sheet(ID_WYJAZDY)
     magazyn = {}
@@ -107,7 +150,12 @@ def oblicz_aktualny_stan():
     dane = list(magazyn.values())
     df_stan = pd.DataFrame(dane) if dane else pd.DataFrame(columns=["Kod", "Nazwa", "Stan"])
     df_stan = df_stan.sort_values(by="Kod").reset_index(drop=True)
+    save_data_to_sheet(ID_STAN, df_stan)
+    
     return df_stan[df_stan["Stan"] > 0].reset_index(drop=True)
+
+def get_stan_magazynowy():
+    return oblicz_i_zapisz_aktualny_stan()
 
 def get_wszystkie_materialy_bazy():
     materialy = {}
@@ -275,7 +323,32 @@ with tab_przyjazd:
 
     if st.session_state.basket_pz:
         st.dataframe(pd.DataFrame(st.session_state.basket_pz), use_container_width=True)
-        st.info("📌 Dodawanie pozycji tworzy wpis do rejestru przyjazdów.")
+        
+        if st.button("📥 ZATWIERDŹ PRZYJAZD (Zapisz w Google Sheets)", type="primary"):
+            df_przyjazdy = get_data_from_sheet(ID_PRZYJAZDY)
+            pelne_z = f"{skad_pz} {nr_rej_pz}".strip()
+            nowe_wpisy = []
+
+            for item in st.session_state.basket_pz:
+                nowe_wpisy.append({
+                    "Data_Godzina": datetime.now().strftime("%Y-%m-%d %H:%M"), 
+                    "Wystawiajacy": pelne_nazwisko, 
+                    "Z_Skad": pelne_z, 
+                    "Do_Dokad": dokad_pz, 
+                    "Uwagi": uwagi_pz, 
+                    "Kod": clean_code(item["Kod"]), 
+                    "Nazwa": item["Nazwa"], 
+                    "Nr_Seryjny": item["Nr_Seryjny"],
+                    "Ilosc": item["Ilosc"]
+                })
+            
+            df_nowy_pz = pd.concat([df_przyjazdy, pd.DataFrame(nowe_wpisy)], ignore_index=True)
+            save_data_to_sheet(ID_PRZYJAZDY, df_nowy_pz)
+            oblicz_i_zapisz_aktualny_stan()
+
+            st.success("✅ Przyjazd został zapisany na stałe w Google Sheets!")
+            st.session_state.basket_pz = []
+            st.rerun()
 
 # TAB 2: WYJAZD
 with tab_wyjazd:
@@ -287,7 +360,7 @@ with tab_wyjazd:
         nr_rej_wz = st.text_input("Nr rejestracyjny / Auto:", key="nr_rej_wz")
         uwagi_wz = st.text_input("Uwagi:", key="uwagi_wz")
 
-    df_mag_wz = oblicz_aktualny_stan()
+    df_mag_wz = get_stan_magazynowy()
     if "basket_wz" not in st.session_state: st.session_state.basket_wz = []
     
     opcje_wz = [""] + [f"{clean_code(r['Kod'])} | {r['Nazwa']} (Stan: {r['Stan']} szt.)" for _, r in df_mag_wz.iterrows()] if not df_mag_wz.empty else [""]
@@ -320,7 +393,7 @@ with tab_wyjazd:
         st.write("Twój podpis (Osoba wysyłająca):")
         canvas_result_wz = st_canvas(stroke_width=2, stroke_color="#000", background_color="#FFF", height=120, width=400, drawing_mode="freedraw", key="canvas_wz", return_image_data=True)
 
-        if st.button("🚚 GENERUJ DOKUMENT WZ (PDF)", type="primary"):
+        if st.button("🚚 ZATWIERDŹ WYJAZD I ZAPISZ W CHMURZE", type="primary"):
             sig_bytes = None
             if canvas_result_wz.image_data is not None:
                 img = Image.fromarray(canvas_result_wz.image_data.astype('uint8'), 'RGBA')
@@ -329,14 +402,36 @@ with tab_wyjazd:
                 sig_bytes = buf.getvalue()
 
             df_wyjazdy = get_data_from_sheet(ID_WYJAZDY)
+            df_logi = get_data_from_sheet(ID_KOREKTY)
             nr_dok = f"P/{datetime.now().strftime('%Y/%m')}/{(len(df_wyjazdy) + 1):03d}"
             data_dok = datetime.now().strftime('%d-%m-%Y')
             pelny_cel = f"{dokad_wz} {nr_rej_wz}".strip()
+            nowe_wpisy = []
+            
+            for item in st.session_state.basket_wz:
+                nowe_wpisy.append({
+                    "Data_Godzina": datetime.now().strftime("%Y-%m-%d %H:%M"), 
+                    "Nr_Dokumentu": nr_dok, 
+                    "Wystawiajacy": pelne_nazwisko, 
+                    "Z_Skad": skad_wz, 
+                    "Do_Dokad": pelny_cel, 
+                    "Uwagi": uwagi_wz, 
+                    "Kod": clean_code(item["Kod"]), 
+                    "Nazwa": item["Nazwa"], 
+                    "Ilosc": item["Ilosc"]
+                })
+            
+            df_nowe = pd.DataFrame(nowe_wpisy)
+            save_data_to_sheet(ID_WYJAZDY, pd.concat([df_wyjazdy, df_nowe], ignore_index=True))
+            save_data_to_sheet(ID_KOREKTY, pd.concat([df_logi, df_nowe], ignore_index=True))
+            oblicz_i_zapisz_aktualny_stan()
 
             pdf_bytes = generate_pdf(nr_dok, skad_wz, pelny_cel, data_dok, st.session_state.basket_wz, sig_bytes)
             nazwa_pdf = f"WZ_{datetime.now().strftime('%Y-%m-%d')}_{st.session_state.nazwisko.replace(' ', '_')}.pdf"
+            with open(os.path.join(FOLDER_ARCHIWUM, nazwa_pdf), "wb") as f: f.write(pdf_bytes.getbuffer())
 
-            st.success(f"✅ Dokument {nr_dok} wygenerowany pomyślnie!")
+            wyslij_email_z_pdf(st.session_state.email, nazwa_pdf, pdf_bytes)
+            st.success(f"✅ Towar wydano! Dokument {nr_dok} trwale zapisany w Google Sheets.")
             st.download_button(label="📥 Pobierz Dokument PDF", data=pdf_bytes, file_name=nazwa_pdf, mime="application/pdf")
             st.session_state.basket_wz = []
 
@@ -351,13 +446,41 @@ with tab_korekta:
         
         if not df_x.empty:
             st.dataframe(df_x, use_container_width=True)
+            opcje_x = [f"Wiersz ID: {idx} | Data: {row.get('Data_Godzina')} | Kod: {row.get('Kod')} | Nazwa: {row.get('Nazwa')}" for idx, row in df_x.iterrows()]
+            wybrana_pozycja = st.selectbox("Pozycja do rozliczenia:", options=[""] + opcje_x)
+            
+            if wybrana_pozycja:
+                row_idx = int(wybrana_pozycja.split(" | ")[0].replace("Wiersz ID: ", ""))
+                wiersz_do_poprawy = df_wz_all.loc[row_idx]
+                nowa_ilosc_val = st.number_input("Wpisz FAKTYCZNĄ przeliczoną ilość (szt.):", min_value=1, value=1, key="nowa_ilosc_korekta")
+                
+                if st.button("⚖️ ZAPISZ ILOŚĆ I POPRAW WIERSZ", type="primary"):
+                    df_wz_all.loc[row_idx, "Ilosc"] = int(nowa_ilosc_val)
+                    save_data_to_sheet(ID_WYJAZDY, df_wz_all)
+                    
+                    df_logi = get_data_from_sheet(ID_KOREKTY)
+                    nowy_log = pd.DataFrame([{
+                        "Data_Godzina": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "Nr_Dokumentu": wiersz_do_poprawy.get("Nr_Dokumentu"),
+                        "Wystawiajacy": pelne_nazwisko,
+                        "Z_Skad": wiersz_do_poprawy.get("Z_Skad"),
+                        "Do_Dokad": wiersz_do_poprawy.get("Do_Dokad"),
+                        "Uwagi": f"Korekta ilości X na {nowa_ilosc_val}",
+                        "Kod": wiersz_do_poprawy.get("Kod"),
+                        "Nazwa": wiersz_do_poprawy.get("Nazwa"),
+                        "Ilosc": nowa_ilosc_val
+                    }])
+                    save_data_to_sheet(ID_KOREKTY, pd.concat([df_logi, nowy_log], ignore_index=True))
+                    oblicz_i_zapisz_aktualny_stan()
+                    st.success(f"✅ Pozycja zaktualizowana w Google Sheets! Zmieniono 'X' na {nowa_ilosc_val} szt.")
+                    st.rerun()
         else:
             st.success("🎉 Brak oczekujących wyjazdów z 'X'!")
 
 # TAB 4: STAN MAGAZYNOWY
 with tab_stan:
-    st.subheader("Bieżący stan magazynu (na podstawie Arkuszy Google)")
-    st.dataframe(oblicz_aktualny_stan(), use_container_width=True)
+    st.subheader("Bieżący stan magazynu (z Google Sheets)")
+    st.dataframe(get_stan_magazynowy(), use_container_width=True)
 
 # TAB 5: LOGI / HISTORIA
 with tab_logi:
