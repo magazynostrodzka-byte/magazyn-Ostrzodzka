@@ -1,6 +1,7 @@
 import os
 import io
 import smtplib
+import urllib.request
 from email.message import EmailMessage
 from datetime import datetime
 import pandas as pd
@@ -178,25 +179,26 @@ def get_wszystkie_materialy_bazy():
     return materialy
 
 # ==========================================
-# GENEROWANIE DOKUMENTU PDF
+# GENEROWANIE DOKUMENTU PDF (Z POLSKIMI ZNAKAMI)
 # ==========================================
 def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_bytes=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=50, leftMargin=50, topMargin=40, bottomMargin=70)
     story, styles = [], getSampleStyleSheet()
     
+    font_reg = "Roboto-Regular.ttf"
+    font_bold = "Roboto-Bold.ttf"
     try:
-        pdfmetrics.registerFont(TTFont('DejaVu', 'DejaVuSans.ttf'))
-        pdfmetrics.registerFont(TTFont('DejaVu-Bold', 'DejaVuSans-Bold.ttf'))
-        pdfmetrics.registerFont(TTFont('DejaVu-BoldOblique', 'DejaVuSans-BoldOblique.ttf'))
-        FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'DejaVu', 'DejaVu-Bold', 'DejaVu-BoldOblique'
+        if not os.path.exists(font_reg):
+            urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Regular.ttf", font_reg)
+        if not os.path.exists(font_bold):
+            urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf", font_bold)
+            
+        pdfmetrics.registerFont(TTFont('Roboto', font_reg))
+        pdfmetrics.registerFont(TTFont('Roboto-Bold', font_bold))
+        FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'Roboto', 'Roboto-Bold', 'Roboto-Bold'
     except Exception:
-        try:
-            pdfmetrics.registerFont(TTFont('Arial', 'arial.ttf'))
-            pdfmetrics.registerFont(TTFont('Arial-Bold', 'arialbd.ttf'))
-            FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'Arial', 'Arial-Bold', 'Arial-BoldItalic'
-        except Exception:
-            FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'Helvetica', 'Helvetica-Bold', 'Helvetica-BoldOblique'
+        FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'Helvetica', 'Helvetica-Bold', 'Helvetica-BoldOblique'
     
     style_normal = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontName=FONT_NORMAL, fontSize=10, leading=14)
     style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=FONT_TITLE, fontSize=16, alignment=1, spaceAfter=5)
@@ -462,7 +464,8 @@ with tab_korekta:
                 nowa_ilosc_val = st.number_input("Wpisz FAKTYCZNĄ przeliczoną ilość (szt.):", min_value=1, value=1, key="nowa_ilosc_korekta")
                 
                 if st.button("⚖️ ZAPISZ ILOŚĆ I POPRAW WIERSZ", type="primary"):
-                    df_wz_all.loc[row_idx, "Ilosc"] = int(nowa_ilosc_val)
+                    # Nadpisanie wiersza wymuszoną "tekstową liczbą", by usunąć "X" bez błędu typów
+                    df_wz_all.loc[row_idx, "Ilosc"] = str(int(nowa_ilosc_val))
                     save_data_to_sheet(ID_WYJAZDY, df_wz_all)
                     
                     df_logi = get_data_from_sheet(ID_KOREKTY)
