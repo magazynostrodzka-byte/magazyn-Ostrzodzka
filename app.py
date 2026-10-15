@@ -24,12 +24,13 @@ from reportlab.pdfbase.ttfonts import TTFont
 # ==========================================
 HASLO_MAGAZYNU = "Magazyn2026!"
 
-# ID Twoich 5 Arkuszy Google:
+# ID Arkuszy Google:
 ID_KOREKTY     = "1m6dcMFKH1aJxJRl114KQSXn5dXIfz-RZP8yd4999qvk"
 ID_PRZYJAZDY   = "1QkP7shoHQVX2YBOmU_JIMO7LUN18z2055TdllrviQ0g"
 ID_WYJAZDY     = "16_AlSmXwjSOhzvPe0PccxEDhI4Gl7okGFrXyucju74g"
 ID_STAN        = "1uTqvHbTDhwBuLH0xJgbMmlM8KX5w_wLpjnkD1CP-kcg"
 ID_USZKODZENIA = "1cI51x3GwkJFcE4mA3kio10CJhyWLUsiSXkLfmC2Djsg"
+ID_CZYSZCZENIE = "19mkiLHLaaMjm3284b_5pnKLhFmUKI_3FMd-YP-0fdEY"
 
 LISTA_BUDOW = ["M422- Ostródzka IV/Wawel", "M9-Klaudyn ul. Ekologiczna 4"]
 LISTA_ODBIORCOW = ["Magazyn Własny", "Podwykonawca - Zbrojenia", "Podwykonawca - Cieśle"]
@@ -53,7 +54,7 @@ def get_gspread_client():
     credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     return gspread.authorize(credentials)
 
-# Bezlimitowy odczyt przez CSV z cache na 5 sekund
+# Odczyt przez CSV z cache na 5 sekund i obsługą pustych plików
 @st.cache_data(ttl=5)
 def get_data_from_sheet(sheet_id):
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
@@ -61,6 +62,8 @@ def get_data_from_sheet(sheet_id):
         df = pd.read_csv(url)
         return df if df is not None else pd.DataFrame()
     except Exception as e:
+        if "No columns to parse" in str(e) or "EmptyDataError" in str(e):
+            return pd.DataFrame()
         st.error(f"Błąd odczytu danych ({sheet_id}): {e}")
         return pd.DataFrame()
 
@@ -179,7 +182,7 @@ def get_wszystkie_materialy_bazy():
     return materialy
 
 # ==========================================
-# GENEROWANIE DOKUMENTU PDF (Z POLSKIMI ZNAKAMI)
+# GENEROWANIE DOKUMENTU PDF
 # ==========================================
 def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_bytes=None):
     buffer = io.BytesIO()
@@ -288,8 +291,8 @@ if not st.session_state.user_identified:
 pelne_nazwisko = f"{st.session_state.imie} {st.session_state.nazwisko}"
 st.title(f"🏗️ Magazyn (Zalogowano: {pelne_nazwisko})")
 
-tab_przyjazd, tab_wyjazd, tab_korekta, tab_stan, tab_uszkodzenia, tab_logi = st.tabs([
-    "📥 Przyjazd", "🚚 Wyjazd (z opcją X)", "🛠️ Korekta / Rozliczenie X", "📦 Stan Magazynowy", "⚠️ Uszkodzenia (Podwykonawcy)", "📊 Logi / Historia"
+tab_przyjazd, tab_wyjazd, tab_korekta, tab_stan, tab_uszkodzenia, tab_czyszczenie, tab_logi = st.tabs([
+    "📥 Przyjazd", "🚚 Wyjazd (z opcją X)", "🛠️ Korekta / Rozliczenie X", "📦 Stan Magazynowy", "⚠️ Uszkodzenia (Podwykonawcy)", "🧹 Czyszczenie sprzętu", "📊 Logi / Historia"
 ])
 
 # TAB 1: PRZYJAZD
@@ -517,12 +520,11 @@ with tab_uszkodzenia:
     with col_u1:
         st.subheader("⚠️ Zewidencjonuj zniszczenia / ubytki sprzętu")
         
-        # Pobieramy istniejące numery dokumentów WZ z wyjazdów
         df_wz_lista = get_data_from_sheet(ID_WYJAZDY)
         lista_dok_wz = []
         if not df_wz_lista.empty and "Nr_Dokumentu" in df_wz_lista.columns:
             lista_dok_wz = [str(x).strip() for x in df_wz_lista["Nr_Dokumentu"].dropna().unique() if str(x).strip() and str(x).strip().lower() != "nan"]
-            lista_dok_wz = list(reversed(lista_dok_wz)) # Najnowsze numery na górze listy
+            lista_dok_wz = list(reversed(lista_dok_wz))
 
         c_meta1, c_meta2 = st.columns(2)
         with c_meta1:
@@ -611,14 +613,122 @@ with tab_uszkodzenia:
             st.dataframe(podsumowanie, use_container_width=True)
         else:
             st.info("Brak zarejestrowanych uszkodzeń.")
-# TAB 6: LOGI / HISTORIA
+
+# TAB 6: CZYSZCZENIE SPRZĘTU
+with tab_czyszczenie:
+    col_c1, col_c2 = st.columns([1, 1])
+    
+    with col_c1:
+        st.subheader("🧹 Zarejestruj godziny czyszczenia sprzętu")
+        
+        df_wz_lista_cz = get_data_from_sheet(ID_WYJAZDY)
+        lista_dok_wz_cz = []
+        if not df_wz_lista_cz.empty and "Nr_Dokumentu" in df_wz_lista_cz.columns:
+            lista_dok_wz_cz = [str(x).strip() for x in df_wz_lista_cz["Nr_Dokumentu"].dropna().unique() if str(x).strip() and str(x).strip().lower() != "nan"]
+            lista_dok_wz_cz = list(reversed(lista_dok_wz_cz))
+
+        c_cz1, c_cz2 = st.columns(2)
+        with c_cz1:
+            data_czyszczenia = st.date_input("Data czyszczenia / wywozu:", value=datetime.now(), key="data_czyszczenia").strftime("%Y-%m-%d")
+        with c_cz2:
+            nr_dok_cz_input = st.selectbox(
+                "Numer dokumentu WZ:",
+                options=lista_dok_wz_cz,
+                accept_new_options=True,
+                index=None,
+                placeholder="Wpisz lub wybierz numer WZ...",
+                key="sel_nr_dok_cz"
+            )
+            nr_dok_cz = str(nr_dok_cz_input).strip() if nr_dok_cz_input else ""
+
+        st.markdown("---")
+        
+        baza_wszystkich = get_wszystkie_materialy_bazy()
+        opcje_cz = [""] + [f"{kod} | {nazwa}" for kod, nazwa in baza_wszystkich.items()]
+        
+        wybrany_mat_cz = st.selectbox("Wybierz sprzęt z bazy:", options=opcje_cz, key="sel_mat_cz")
+        godziny_cz = st.number_input("Ilość godzin czyszczenia (h):", min_value=0.5, value=1.0, step=0.5, key="godz_cz")
+        uwagi_cz = st.text_input("Uwagi / Opis prac (opcjonalnie):", key="uwagi_cz")
+
+        if "basket_czyszczenie" not in st.session_state: st.session_state.basket_czyszczenie = []
+
+        if wybrany_mat_cz and st.button("➕ Dodaj do koszyka czyszczenia"):
+            kod_c = wybrany_mat_cz.split(" | ")[0]
+            nazwa_c = baza_wszystkich[kod_c]
+            st.session_state.basket_czyszczenie.append({
+                "Data_Czyszczenia": str(data_czyszczenia),
+                "Nr_Dokumentu": nr_dok_cz,
+                "Kod": kod_c,
+                "Nazwa": nazwa_c,
+                "Godziny": float(godziny_cz),
+                "Uwagi": uwagi_cz.strip()
+            })
+            st.rerun()
+
+        if st.session_state.basket_czyszczenie:
+            st.markdown("---")
+            st.markdown("### 🛒 Koszyk czyszczenia do zapisania:")
+            for i, item in enumerate(st.session_state.basket_czyszczenie):
+                col_a, col_b, col_c = st.columns([5, 2, 1])
+                dok_info = f" | Dok: {item['Nr_Dokumentu']}" if item['Nr_Dokumentu'] else ""
+                col_a.write(f"**{item['Kod']} - {item['Nazwa']}** (Data: {item['Data_Czyszczenia']}{dok_info})")
+                col_b.write(f"Czas: **{item['Godziny']} h**")
+                if col_c.button("❌ Usuń", key=f"del_cz_{i}"):
+                    st.session_state.basket_czyszczenie.pop(i)
+                    st.rerun()
+
+            st.markdown("---")
+            if st.button("💾 ZAPISZ GODZINY CZYSZCZENIA", type="primary"):
+                df_c = get_data_from_sheet(ID_CZYSZCZENIE)
+                nowe_wpisy = []
+                for item in st.session_state.basket_czyszczenie:
+                    nowe_wpisy.append({
+                        "Data_Wpisu": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "Wprowadzajacy": pelne_nazwisko,
+                        "Data_Czyszczenia": item["Data_Czyszczenia"],
+                        "Nr_Dokumentu": item["Nr_Dokumentu"],
+                        "Kod": item["Kod"],
+                        "Nazwa": item["Nazwa"],
+                        "Godziny": str(item["Godziny"]),
+                        "Uwagi": item["Uwagi"]
+                    })
+                save_data_to_sheet(ID_CZYSZCZENIE, pd.concat([df_c, pd.DataFrame(nowe_wpisy)], ignore_index=True))
+                st.success("✅ Godziny czyszczenia zostały pomyślnie zapisane w Google Sheets!")
+                st.session_state.basket_czyszczenie = []
+                st.rerun()
+
+    with col_c2:
+        st.subheader("📊 Suma godzin czyszczenia wg miesięcy")
+        df_c_all = get_data_from_sheet(ID_CZYSZCZENIE)
+        
+        if not df_c_all.empty and "Godziny" in df_c_all.columns and "Data_Czyszczenia" in df_c_all.columns:
+            df_c_all['Godziny'] = pd.to_numeric(df_c_all['Godziny'], errors='coerce').fillna(0)
+            df_c_all['Data_Dt'] = pd.to_datetime(df_c_all['Data_Czyszczenia'], errors='coerce')
+            df_c_all['Miesiąc'] = df_c_all['Data_Dt'].dt.strftime('%Y-%m')
+            
+            podsumowanie_miesiac = df_c_all.groupby('Miesiąc')['Godziny'].sum().reset_index()
+            podsumowanie_miesiac.columns = ['Miesiąc (YYYY-MM)', 'Suma godzin (h)']
+            podsumowanie_miesiac = podsumowanie_miesiac.sort_values(by='Miesiąc (YYYY-MM)', ascending=False)
+            
+            st.dataframe(podsumowanie_miesiac, use_container_width=True)
+            
+            st.markdown("---")
+            st.subheader("📋 Szczegółowy podział wg sprzętu i miesięcy")
+            podsumowanie_sprzet = df_c_all.groupby(['Miesiąc', 'Kod', 'Nazwa'])['Godziny'].sum().reset_index()
+            podsumowanie_sprzet.columns = ['Miesiąc', 'Kod', 'Nazwa sprzętu', 'Suma godzin (h)']
+            st.dataframe(podsumowanie_sprzet, use_container_width=True)
+        else:
+            st.info("Brak zarejestrowanych godzin czyszczenia.")
+
+# TAB 7: LOGI / HISTORIA
 with tab_logi:
     st.subheader("📊 Rejestr wykonanych operacji (Google Sheets)")
     typ_logu = st.selectbox("Wybierz historię do wyświetlenia:", [
         "Wszystkie Wyjazdy / Logi WZ", 
         "Wszystkie Przyjazdy PZ", 
         "Logi Korekt",
-        "Rejestr Uszkodzeń / Złomu"
+        "Rejestr Uszkodzeń / Złomu",
+        "Rejestr Czyszczenia Sprzętu"
     ])
     if typ_logu == "Wszystkie Wyjazdy / Logi WZ":
         st.dataframe(get_data_from_sheet(ID_WYJAZDY), use_container_width=True)
@@ -626,5 +736,7 @@ with tab_logi:
         st.dataframe(get_data_from_sheet(ID_PRZYJAZDY), use_container_width=True)
     elif typ_logu == "Logi Korekt":
         st.dataframe(get_data_from_sheet(ID_KOREKTY), use_container_width=True)
-    else:
+    elif typ_logu == "Rejestr Uszkodzeń / Złomu":
         st.dataframe(get_data_from_sheet(ID_USZKODZENIA), use_container_width=True)
+    else:
+        st.dataframe(get_data_from_sheet(ID_CZYSZCZENIE), use_container_width=True)
