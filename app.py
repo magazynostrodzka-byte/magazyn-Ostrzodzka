@@ -517,11 +517,18 @@ with tab_uszkodzenia:
     with col_u1:
         st.subheader("⚠️ Zewidencjonuj zniszczenia / ubytki sprzętu")
         
-        podwykonawca_obciazenie = st.selectbox(
-            "Podwykonawca do obciążenia:", 
-            ["Podwykonawca - Zbrojenia", "Podwykonawca - Cieśle", "Inny / Bezpośrednio Budowa"],
-            key="podw_uszk"
-        )
+        c_meta1, c_meta2 = st.columns(2)
+        with c_meta1:
+            podwykonawca_obciazenie = st.selectbox(
+                "Podwykonawca do obciążenia:", 
+                ["Podwykonawca - Zbrojenia", "Podwykonawca - Cieśle", "Inny / Bezpośrednio Budowa"],
+                key="podw_uszk"
+            )
+            data_wywozu = st.date_input("Data wywozu:", value=datetime.now(), key="data_wywozu_uszk").strftime("%Y-%m-%d")
+        with c_meta2:
+            nr_dok_uszk = st.text_input("Numer dokumentu (opcjonalnie):", key="nr_dok_uszk")
+        
+        st.markdown("---")
         
         baza_wszystkich = get_wszystkie_materialy_bazy()
         opcje_uszk = [""] + [f"{kod} | {nazwa}" for kod, nazwa in baza_wszystkich.items()]
@@ -537,6 +544,8 @@ with tab_uszkodzenia:
             nazwa_u = baza_wszystkich[kod_u]
             st.session_state.basket_uszk.append({
                 "Podwykonawca": podwykonawca_obciazenie,
+                "Data_Wywozu": str(data_wywozu),
+                "Nr_Dokumentu": nr_dok_uszk.strip(),
                 "Kod": kod_u,
                 "Nazwa": nazwa_u,
                 "Typ": typ_uszkodzenia,
@@ -549,7 +558,8 @@ with tab_uszkodzenia:
             st.markdown("### 🛒 Koszyk pozycji do potrącenia:")
             for i, item in enumerate(st.session_state.basket_uszk):
                 col_a, col_b, col_c = st.columns([5, 2, 1])
-                col_a.write(f"**{item['Podwykonawca']}** | {item['Kod']} - {item['Nazwa']} ({item['Typ']})")
+                dok_info = f" | Dok: {item['Nr_Dokumentu']}" if item['Nr_Dokumentu'] else ""
+                col_a.write(f"**{item['Podwykonawca']}** (Wywóz: {item['Data_Wywozu']}{dok_info}) | {item['Kod']} - {item['Nazwa']} ({item['Typ']})")
                 col_b.write(f"Ilość: **{item['Ilosc']}** szt.")
                 if col_c.button("❌ Usuń", key=f"del_uszk_{i}"):
                     st.session_state.basket_uszk.pop(i)
@@ -564,6 +574,8 @@ with tab_uszkodzenia:
                         "Data_Wpisu": datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "Wprowadzajacy": pelne_nazwisko,
                         "Podwykonawca": item["Podwykonawca"],
+                        "Data_Wywozu": item["Data_Wywozu"],
+                        "Nr_Dokumentu": item["Nr_Dokumentu"],
                         "Typ": item["Typ"],
                         "Kod": item["Kod"],
                         "Nazwa": item["Nazwa"],
@@ -583,7 +595,6 @@ with tab_uszkodzenia:
             st.dataframe(podsumowanie, use_container_width=True)
         else:
             st.info("Brak zarejestrowanych uszkodzeń.")
-
 # TAB 6: LOGI / HISTORIA
 with tab_logi:
     st.subheader("📊 Rejestr wykonanych operacji (Google Sheets)")
