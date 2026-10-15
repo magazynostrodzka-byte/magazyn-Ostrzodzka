@@ -331,7 +331,15 @@ with tab_przyjazd:
             st.rerun()
 
     if st.session_state.basket_pz:
-        st.dataframe(pd.DataFrame(st.session_state.basket_pz), use_container_width=True)
+        st.markdown("### 🛒 Twój koszyk przyjazdu:")
+        for i, item in enumerate(st.session_state.basket_pz):
+            c1, c2, c3 = st.columns([5, 2, 1])
+            c1.write(f"**{item['Kod']}** | {item['Nazwa']} (SN: {item['Nr_Seryjny']})")
+            c2.write(f"Ilość: **{item['Ilosc']}** szt.")
+            if c3.button("❌ Usuń", key=f"del_pz_{i}"):
+                st.session_state.basket_pz.pop(i)
+                st.rerun()
+        st.markdown("---")
         
         if st.button("📥 ZATWIERDŹ PRZYJAZD (Zapisz w Google Sheets)", type="primary"):
             df_przyjazdy = get_data_from_sheet(ID_PRZYJAZDY)
@@ -398,7 +406,16 @@ with tab_wyjazd:
                 st.rerun()
 
     if st.session_state.basket_wz:
-        st.dataframe(pd.DataFrame(st.session_state.basket_wz), use_container_width=True)
+        st.markdown("### 🛒 Twój koszyk wyjazdu:")
+        for i, item in enumerate(st.session_state.basket_wz):
+            c1, c2, c3 = st.columns([5, 2, 1])
+            c1.write(f"**{item['Kod']}** | {item['Nazwa']}")
+            c2.write(f"Ilość: **{item['Ilosc']}** szt.")
+            if c3.button("❌ Usuń", key=f"del_wz_{i}"):
+                st.session_state.basket_wz.pop(i)
+                st.rerun()
+        st.markdown("---")
+        
         st.write("Twój podpis (Osoba wysyłająca):")
         canvas_result_wz = st_canvas(stroke_width=2, stroke_color="#000", background_color="#FFF", height=120, width=400, drawing_mode="freedraw", key="canvas_wz", return_image_data=True)
 
