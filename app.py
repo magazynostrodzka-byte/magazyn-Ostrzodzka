@@ -182,67 +182,31 @@ def get_wszystkie_materialy_bazy():
     return materialy
 
 # ==========================================
-# GENEROWANIE DOKUMENTU PDF (Z POLSKIMI ZNAKAMI)
+# GENEROWANIE DOKUMENTU PDF (LOKALNE CZCIONKI)
 # ==========================================
 def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_bytes=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=50, leftMargin=50, topMargin=40, bottomMargin=70)
     story, styles = [], getSampleStyleSheet()
     
-    # Pliki lokalne czcionek
     font_reg = "Roboto-Regular.ttf"
     font_bold = "Roboto-Bold.ttf"
     
-    # Bezpieczne pobieranie bezpośrednio z Google Fonts (CDN)
-    url_reg = "https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxP.ttf"
-    url_bold = "https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlfBBzcAMP5.ttf"
-
-    try:
-        if not os.path.exists(font_reg):
-            urllib.request.urlretrieve(url_reg, font_reg)
-        if not os.path.exists(font_bold):
-            urllib.request.urlretrieve(url_bold, font_bold)
-            
+    # Rejestracja czcionek z plików w repozytorium
+    if os.path.exists(font_reg) and os.path.exists(font_bold):
         pdfmetrics.registerFont(TTFont('Roboto', font_reg))
         pdfmetrics.registerFont(TTFont('Roboto-Bold', font_bold))
         FONT_NORMAL = 'Roboto'
         FONT_BOLD = 'Roboto-Bold'
-    except Exception as e:
-        # Awaryjnie
+    else:
+        # Awaryjnie, gdyby plików z jakiegoś powodu brakowało
         FONT_NORMAL = 'Helvetica'
         FONT_BOLD = 'Helvetica-Bold'
     
-    # Jawne przypisanie fontName do każdego stylu
-    style_normal = ParagraphStyle(
-        'NormalStyle', 
-        parent=styles['Normal'], 
-        fontName=FONT_NORMAL, 
-        fontSize=10, 
-        leading=14
-    )
-    style_bold = ParagraphStyle(
-        'BoldStyle', 
-        parent=styles['Normal'], 
-        fontName=FONT_BOLD, 
-        fontSize=10, 
-        leading=14
-    )
-    style_title = ParagraphStyle(
-        'TitleStyle', 
-        parent=styles['Heading1'], 
-        fontName=FONT_BOLD, 
-        fontSize=16, 
-        alignment=1, 
-        spaceAfter=5
-    )
-    style_subtitle = ParagraphStyle(
-        'SubTitleStyle', 
-        parent=styles['Normal'], 
-        fontName=FONT_NORMAL, 
-        fontSize=9, 
-        alignment=1, 
-        spaceAfter=20
-    )
+    style_normal = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontName=FONT_NORMAL, fontSize=10, leading=14)
+    style_bold = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontName=FONT_BOLD, fontSize=10, leading=14)
+    style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=FONT_BOLD, fontSize=16, alignment=1, spaceAfter=5)
+    style_subtitle = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontName=FONT_NORMAL, fontSize=9, alignment=1, spaceAfter=20)
     
     logo_path = "logo.png" if os.path.exists("logo.png") else ("logo.jpg" if os.path.exists("logo.jpg") else None)
     if logo_path:
