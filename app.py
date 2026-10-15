@@ -517,6 +517,13 @@ with tab_uszkodzenia:
     with col_u1:
         st.subheader("⚠️ Zewidencjonuj zniszczenia / ubytki sprzętu")
         
+        # Pobieramy istniejące numery dokumentów WZ z wyjazdów
+        df_wz_lista = get_data_from_sheet(ID_WYJAZDY)
+        lista_dok_wz = []
+        if not df_wz_lista.empty and "Nr_Dokumentu" in df_wz_lista.columns:
+            lista_dok_wz = [str(x).strip() for x in df_wz_lista["Nr_Dokumentu"].dropna().unique() if str(x).strip() and str(x).strip().lower() != "nan"]
+            lista_dok_wz = list(reversed(lista_dok_wz)) # Najnowsze numery na górze listy
+
         c_meta1, c_meta2 = st.columns(2)
         with c_meta1:
             podwykonawca_obciazenie = st.selectbox(
@@ -525,8 +532,15 @@ with tab_uszkodzenia:
                 key="podw_uszk"
             )
             data_wywozu = st.date_input("Data wywozu:", value=datetime.now(), key="data_wywozu_uszk").strftime("%Y-%m-%d")
+            
         with c_meta2:
-            nr_dok_uszk = st.text_input("Numer dokumentu (opcjonalnie):", key="nr_dok_uszk")
+            opcje_dok = ["Inny / Wpisz ręcznie"] + lista_dok_wz
+            wybrany_dok_opcja = st.selectbox("Wybierz dokument WZ:", options=opcje_dok, key="sel_nr_dok_uszk")
+            
+            if wybrany_dok_opcja == "Inny / Wpisz ręcznie":
+                nr_dok_uszk = st.text_input("Wpisz numer dokumentu z ręki:", key="nr_dok_uszk_manual")
+            else:
+                nr_dok_uszk = wybrany_dok_opcja
         
         st.markdown("---")
         
