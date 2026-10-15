@@ -182,30 +182,67 @@ def get_wszystkie_materialy_bazy():
     return materialy
 
 # ==========================================
-# GENEROWANIE DOKUMENTU PDF
+# GENEROWANIE DOKUMENTU PDF (Z POLSKIMI ZNAKAMI)
 # ==========================================
 def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_bytes=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=50, leftMargin=50, topMargin=40, bottomMargin=70)
     story, styles = [], getSampleStyleSheet()
     
+    # Pliki lokalne czcionek
     font_reg = "Roboto-Regular.ttf"
     font_bold = "Roboto-Bold.ttf"
+    
+    # Bezpieczne pobieranie bezpośrednio z Google Fonts (CDN)
+    url_reg = "https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxP.ttf"
+    url_bold = "https://fonts.gstatic.com/s/roboto/v30/KFOlCnqEu92Fr1MmWUlfBBzcAMP5.ttf"
+
     try:
         if not os.path.exists(font_reg):
-            urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Regular.ttf", font_reg)
+            urllib.request.urlretrieve(url_reg, font_reg)
         if not os.path.exists(font_bold):
-            urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf", font_bold)
+            urllib.request.urlretrieve(url_bold, font_bold)
             
         pdfmetrics.registerFont(TTFont('Roboto', font_reg))
         pdfmetrics.registerFont(TTFont('Roboto-Bold', font_bold))
-        FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'Roboto', 'Roboto-Bold', 'Roboto-Bold'
-    except Exception:
-        FONT_NORMAL, FONT_BOLD, FONT_TITLE = 'Helvetica', 'Helvetica-Bold', 'Helvetica-BoldOblique'
+        FONT_NORMAL = 'Roboto'
+        FONT_BOLD = 'Roboto-Bold'
+    except Exception as e:
+        # Awaryjnie
+        FONT_NORMAL = 'Helvetica'
+        FONT_BOLD = 'Helvetica-Bold'
     
-    style_normal = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontName=FONT_NORMAL, fontSize=10, leading=14)
-    style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName=FONT_TITLE, fontSize=16, alignment=1, spaceAfter=5)
-    style_subtitle = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontName=FONT_NORMAL, fontSize=9, alignment=1, spaceAfter=20)
+    # Jawne przypisanie fontName do każdego stylu
+    style_normal = ParagraphStyle(
+        'NormalStyle', 
+        parent=styles['Normal'], 
+        fontName=FONT_NORMAL, 
+        fontSize=10, 
+        leading=14
+    )
+    style_bold = ParagraphStyle(
+        'BoldStyle', 
+        parent=styles['Normal'], 
+        fontName=FONT_BOLD, 
+        fontSize=10, 
+        leading=14
+    )
+    style_title = ParagraphStyle(
+        'TitleStyle', 
+        parent=styles['Heading1'], 
+        fontName=FONT_BOLD, 
+        fontSize=16, 
+        alignment=1, 
+        spaceAfter=5
+    )
+    style_subtitle = ParagraphStyle(
+        'SubTitleStyle', 
+        parent=styles['Normal'], 
+        fontName=FONT_NORMAL, 
+        fontSize=9, 
+        alignment=1, 
+        spaceAfter=20
+    )
     
     logo_path = "logo.png" if os.path.exists("logo.png") else ("logo.jpg" if os.path.exists("logo.jpg") else None)
     if logo_path:
@@ -219,11 +256,11 @@ def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_byte
     story.append(Spacer(1, 10))
 
     meta_table_data = [
-        [Paragraph("<b>Numer dokumentu:</b>", style_normal), Paragraph(nr_dok, style_normal)],
-        [Paragraph("<b>Typ dokumentu:</b>", style_normal), Paragraph("Przewozowy", style_normal)],
-        [Paragraph("<b>Przewóz z:</b>", style_normal), Paragraph(z_skad, style_normal)],
-        [Paragraph("<b>Przewóz do:</b>", style_normal), Paragraph(do_dokad, style_normal)],
-        [Paragraph("<b>Data:</b>", style_normal), Paragraph(data_dok, style_normal)]
+        [Paragraph("Numer dokumentu:", style_bold), Paragraph(nr_dok, style_normal)],
+        [Paragraph("Typ dokumentu:", style_bold), Paragraph("Przewozowy", style_normal)],
+        [Paragraph("Przewóz z:", style_bold), Paragraph(z_skad, style_normal)],
+        [Paragraph("Przewóz do:", style_bold), Paragraph(do_dokad, style_normal)],
+        [Paragraph("Data:", style_bold), Paragraph(data_dok, style_normal)]
     ]
     
     meta_table = Table(meta_table_data, colWidths=[120, 375])
@@ -234,17 +271,28 @@ def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_byte
     table_data = []
     for item in pozycje:
         nazwa_wyswietlana = f"{item['Nazwa']} (SN: {item['Nr_Seryjny']})" if item.get('Nr_Seryjny') else item['Nazwa']
-        table_data.append([Paragraph(str(item["Kod"]), style_normal), Paragraph(str(nazwa_wyswietlana), style_normal), Paragraph(str(item['Ilosc']), style_normal)])
+        table_data.append([
+            Paragraph(str(item["Kod"]), style_normal), 
+            Paragraph(str(nazwa_wyswietlana), style_normal), 
+            Paragraph(str(item['Ilosc']), style_normal)
+        ])
     
-    if not table_data: table_data.append(["", "Brak pozycji", ""])
+    if not table_data: 
+        table_data.append(["", Paragraph("Brak pozycji", style_normal), ""])
 
     items_table = Table(table_data, colWidths=[110, 335, 50])
-    items_table.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.black), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
+    items_table.setStyle(TableStyle([
+        ('GRID', (0,0), (-1,-1), 0.5, colors.black), 
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+    ]))
     story.append(items_table)
     story.append(Spacer(1, 30))
 
     podpis_img = RLImage(io.BytesIO(signature_img_bytes), width=120, height=40) if signature_img_bytes else Paragraph("<br/><br/><br/>", style_normal)
-    sig_data = [[podpis_img, Paragraph("<br/><br/><br/>", style_normal)], [Paragraph("Podpis osoby wysyłającej", style_normal), Paragraph("Podpis osoby odbierającej", style_normal)]]
+    sig_data = [
+        [podpis_img, Paragraph("<br/><br/><br/>", style_normal)], 
+        [Paragraph("Podpis osoby wysyłającej", style_normal), Paragraph("Podpis osoby odbierającej", style_normal)]
+    ]
     
     sig_table = Table(sig_data, colWidths=[247, 248])
     sig_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'LEFT'), ('VALIGN', (0,0), (-1,-1), 'BOTTOM')]))
