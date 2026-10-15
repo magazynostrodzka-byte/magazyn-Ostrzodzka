@@ -534,13 +534,15 @@ with tab_uszkodzenia:
             data_wywozu = st.date_input("Data wywozu:", value=datetime.now(), key="data_wywozu_uszk").strftime("%Y-%m-%d")
             
         with c_meta2:
-            opcje_dok = ["Inny / Wpisz ręcznie"] + lista_dok_wz
-            wybrany_dok_opcja = st.selectbox("Wybierz dokument WZ:", options=opcje_dok, key="sel_nr_dok_uszk")
-            
-            if wybrany_dok_opcja == "Inny / Wpisz ręcznie":
-                nr_dok_uszk = st.text_input("Wpisz numer dokumentu z ręki:", key="nr_dok_uszk_manual")
-            else:
-                nr_dok_uszk = wybrany_dok_opcja
+            nr_dok_input = st.selectbox(
+                "Numer dokumentu (wybierz lub wpisz własny):",
+                options=lista_dok_wz,
+                accept_new_options=True,
+                index=None,
+                placeholder="Wpisz lub wybierz numer WZ...",
+                key="sel_nr_dok_uszk"
+            )
+            nr_dok_uszk = str(nr_dok_input).strip() if nr_dok_input else ""
         
         st.markdown("---")
         
@@ -559,7 +561,7 @@ with tab_uszkodzenia:
             st.session_state.basket_uszk.append({
                 "Podwykonawca": podwykonawca_obciazenie,
                 "Data_Wywozu": str(data_wywozu),
-                "Nr_Dokumentu": nr_dok_uszk.strip(),
+                "Nr_Dokumentu": nr_dok_uszk,
                 "Kod": kod_u,
                 "Nazwa": nazwa_u,
                 "Typ": typ_uszkodzenia,
