@@ -445,7 +445,7 @@ with tab_wyjazd:
             df_wyjazdy = get_data_from_sheet(ID_WYJAZDY)
             df_logi = get_data_from_sheet(ID_KOREKTY)
             nr_dok = f"P/{datetime.now().strftime('%Y/%m')}/{(len(df_wyjazdy) + 1):03d}"
-            data_dok = datetime.now().strftime('%d-%m-%Y')
+            data_dok = datetime.now().strftime('%d-%m-%Y %H:%M')
             pelny_cel = f"{dokad_wz} {nr_rej_wz}".strip()
             nowe_wpisy = []
             
@@ -562,7 +562,7 @@ with tab_uszkodzenia:
         opcje_uszk = [""] + [f"{kod} | {nazwa}" for kod, nazwa in baza_wszystkich.items()]
         
         wybrany_mat_uszk = st.selectbox("Wybierz sprzęt z bazy:", options=opcje_uszk, key="sel_uszk")
-        typ_uszkodzenia = st.radio("Rodzaj ubytku:", ["Złom (utylizacja)", "Zmiana klasy (obniżenie wartości)"])
+        typ_uszkodzenia = st.radio("Rodzaj ubytku / zgłoszenia:", ["Złom (utylizacja)", "Zmiana klasy (obniżenie wartości)", "Serwis (naprawa)"])
         ilosc_uszk = st.number_input("Ilość (szt.):", min_value=1, value=1, key="il_uszk")
         
         if "basket_uszk" not in st.session_state: st.session_state.basket_uszk = []
