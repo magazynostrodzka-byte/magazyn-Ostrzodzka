@@ -24,12 +24,12 @@ from reportlab.pdfbase.ttfonts import TTFont
 # ==========================================
 HASLO_MAGAZYNU = "Magazyn2026!"
 
-# ID Twoich 4 Arkuszy Google:
-# 1. korekty | 2. przyjazdy | 3. wyjazdy | 4. stan magazynowy
-ID_KOREKTY   = "1m6dcMFKH1aJxJRl114KQSXn5dXIfz-RZP8yd4999qvk"
-ID_PRZYJAZDY = "1QkP7shoHQVX2YBOmU_JIMO7LUN18z2055TdllrviQ0g"
-ID_WYJAZDY   = "16_AlSmXwjSOhzvPe0PccxEDhI4Gl7okGFrXyucju74g"
-ID_STAN      = "1uTqvHbTDhwBuLH0xJgbMmlM8KX5w_wLpjnkD1CP-kcg"
+# ID Twoich 5 Arkuszy Google:
+ID_KOREKTY     = "1m6dcMFKH1aJxJRl114KQSXn5dXIfz-RZP8yd4999qvk"
+ID_PRZYJAZDY   = "1QkP7shoHQVX2YBOmU_JIMO7LUN18z2055TdllrviQ0g"
+ID_WYJAZDY     = "16_AlSmXwjSOhzvPe0PccxEDhI4Gl7okGFrXyucju74g"
+ID_STAN        = "1uTqvHbTDhwBuLH0xJgbMmlM8KX5w_wLpjnkD1CP-kcg"
+ID_USZKODZENIA = "1cI51x3GwkJFcE4mA3kio10CJhyWLUsiSXkLfmC2Djsg"
 
 LISTA_BUDOW = ["M422- Ostródzka IV/Wawel", "M9-Klaudyn ul. Ekologiczna 4"]
 LISTA_ODBIORCOW = ["Magazyn Własny", "Podwykonawca - Zbrojenia", "Podwykonawca - Cieśle"]
@@ -288,7 +288,9 @@ if not st.session_state.user_identified:
 pelne_nazwisko = f"{st.session_state.imie} {st.session_state.nazwisko}"
 st.title(f"🏗️ Magazyn (Zalogowano: {pelne_nazwisko})")
 
-tab_przyjazd, tab_wyjazd, tab_korekta, tab_stan, tab_logi = st.tabs(["📥 Przyjazd", "🚚 Wyjazd (z opcją X)", "🛠️ Korekta / Rozliczenie X", "📦 Stan Magazynowy", "📊 Logi / Historia"])
+tab_przyjazd, tab_wyjazd, tab_korekta, tab_stan, tab_uszkodzenia, tab_logi = st.tabs([
+    "📥 Przyjazd", "🚚 Wyjazd (z opcją X)", "🛠️ Korekta / Rozliczenie X", "📦 Stan Magazynowy", "⚠️ Uszkodzenia (Podwykonawcy)", "📊 Logi / Historia"
+])
 
 # TAB 1: PRZYJAZD
 with tab_przyjazd:
@@ -333,10 +335,10 @@ with tab_przyjazd:
     if st.session_state.basket_pz:
         st.markdown("### 🛒 Twój koszyk przyjazdu:")
         for i, item in enumerate(st.session_state.basket_pz):
-            c1, c2, c3 = st.columns([5, 2, 1])
-            c1.write(f"**{item['Kod']}** | {item['Nazwa']} (SN: {item['Nr_Seryjny']})")
-            c2.write(f"Ilość: **{item['Ilosc']}** szt.")
-            if c3.button("❌ Usuń", key=f"del_pz_{i}"):
+            col_a, col_b, col_c = st.columns([5, 2, 1])
+            col_a.write(f"**{item['Kod']}** | {item['Nazwa']} (SN: {item['Nr_Seryjny']})")
+            col_b.write(f"Ilość: **{item['Ilosc']}** szt.")
+            if col_c.button("❌ Usuń", key=f"del_pz_{i}"):
                 st.session_state.basket_pz.pop(i)
                 st.rerun()
         st.markdown("---")
@@ -408,14 +410,14 @@ with tab_wyjazd:
     if st.session_state.basket_wz:
         st.markdown("### 🛒 Twój koszyk wyjazdu:")
         for i, item in enumerate(st.session_state.basket_wz):
-            c1, c2, c3 = st.columns([5, 2, 1])
-            c1.write(f"**{item['Kod']}** | {item['Nazwa']}")
-            c2.write(f"Ilość: **{item['Ilosc']}** szt.")
-            if c3.button("❌ Usuń", key=f"del_wz_{i}"):
+            col_a, col_b, col_c = st.columns([5, 2, 1])
+            col_a.write(f"**{item['Kod']}** | {item['Nazwa']}")
+            col_b.write(f"Ilość: **{item['Ilosc']}** szt.")
+            if col_c.button("❌ Usuń", key=f"del_wz_{i}"):
                 st.session_state.basket_wz.pop(i)
                 st.rerun()
         st.markdown("---")
-        
+
         st.write("Twój podpis (Osoba wysyłająca):")
         canvas_result_wz = st_canvas(stroke_width=2, stroke_color="#000", background_color="#FFF", height=120, width=400, drawing_mode="freedraw", key="canvas_wz", return_image_data=True)
 
@@ -481,7 +483,6 @@ with tab_korekta:
                 nowa_ilosc_val = st.number_input("Wpisz FAKTYCZNĄ przeliczoną ilość (szt.):", min_value=1, value=1, key="nowa_ilosc_korekta")
                 
                 if st.button("⚖️ ZAPISZ ILOŚĆ I POPRAW WIERSZ", type="primary"):
-                    # Nadpisanie wiersza wymuszoną "tekstową liczbą", by usunąć "X" bez błędu typów
                     df_wz_all.loc[row_idx, "Ilosc"] = str(int(nowa_ilosc_val))
                     save_data_to_sheet(ID_WYJAZDY, df_wz_all)
                     
@@ -509,13 +510,94 @@ with tab_stan:
     st.subheader("Bieżący stan magazynu (z Google Sheets)")
     st.dataframe(get_stan_magazynowy(), use_container_width=True)
 
-# TAB 5: LOGI / HISTORIA
+# TAB 5: USZKODZENIA (ROZLICZENIA Z PODWYKONAWCAMI)
+with tab_uszkodzenia:
+    col_u1, col_u2 = st.columns([1, 1])
+    
+    with col_u1:
+        st.subheader("⚠️ Zewidencjonuj zniszczenia / ubytki sprzętu")
+        
+        podwykonawca_obciazenie = st.selectbox(
+            "Podwykonawca do obciążenia:", 
+            ["Podwykonawca - Zbrojenia", "Podwykonawca - Cieśle", "Inny / Bezpośrednio Budowa"],
+            key="podw_uszk"
+        )
+        
+        baza_wszystkich = get_wszystkie_materialy_bazy()
+        opcje_uszk = [""] + [f"{kod} | {nazwa}" for kod, nazwa in baza_wszystkich.items()]
+        
+        wybrany_mat_uszk = st.selectbox("Wybierz sprzęt z bazy:", options=opcje_uszk, key="sel_uszk")
+        typ_uszkodzenia = st.radio("Rodzaj ubytku:", ["Złom (utylizacja)", "Zmiana klasy (obniżenie wartości)"])
+        ilosc_uszk = st.number_input("Ilość (szt.):", min_value=1, value=1, key="il_uszk")
+        
+        if "basket_uszk" not in st.session_state: st.session_state.basket_uszk = []
+
+        if wybrany_mat_uszk and st.button("➕ Dodaj do koszyka uszkodzeń"):
+            kod_u = wybrany_mat_uszk.split(" | ")[0]
+            nazwa_u = baza_wszystkich[kod_u]
+            st.session_state.basket_uszk.append({
+                "Podwykonawca": podwykonawca_obciazenie,
+                "Kod": kod_u,
+                "Nazwa": nazwa_u,
+                "Typ": typ_uszkodzenia,
+                "Ilosc": int(ilosc_uszk)
+            })
+            st.rerun()
+
+        if st.session_state.basket_uszk:
+            st.markdown("---")
+            st.markdown("### 🛒 Koszyk pozycji do potrącenia:")
+            for i, item in enumerate(st.session_state.basket_uszk):
+                col_a, col_b, col_c = st.columns([5, 2, 1])
+                col_a.write(f"**{item['Podwykonawca']}** | {item['Kod']} - {item['Nazwa']} ({item['Typ']})")
+                col_b.write(f"Ilość: **{item['Ilosc']}** szt.")
+                if col_c.button("❌ Usuń", key=f"del_uszk_{i}"):
+                    st.session_state.basket_uszk.pop(i)
+                    st.rerun()
+            
+            st.markdown("---")
+            if st.button("💾 ZAPISZ ZGŁOSZENIE (Zapisz w Google Sheets)", type="primary"):
+                df_u = get_data_from_sheet(ID_USZKODZENIA)
+                nowe_wpisy = []
+                for item in st.session_state.basket_uszk:
+                    nowe_wpisy.append({
+                        "Data_Wpisu": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "Wprowadzajacy": pelne_nazwisko,
+                        "Podwykonawca": item["Podwykonawca"],
+                        "Typ": item["Typ"],
+                        "Kod": item["Kod"],
+                        "Nazwa": item["Nazwa"],
+                        "Ilosc": str(item["Ilosc"])
+                    })
+                save_data_to_sheet(ID_USZKODZENIA, pd.concat([df_u, pd.DataFrame(nowe_wpisy)], ignore_index=True))
+                st.success("✅ Zgłoszenie uszkodzeń zostało zapisane na stałe w Google Sheets!")
+                st.session_state.basket_uszk = []
+                st.rerun()
+
+    with col_u2:
+        st.subheader("📋 Suma obciążeń podwykonawców")
+        df_u_all = get_data_from_sheet(ID_USZKODZENIA)
+        if not df_u_all.empty and "Ilosc" in df_u_all.columns:
+            df_u_all['Ilosc'] = pd.to_numeric(df_u_all['Ilosc'], errors='coerce').fillna(0)
+            podsumowanie = df_u_all.groupby(['Podwykonawca', 'Kod', 'Nazwa', 'Typ'])['Ilosc'].sum().reset_index()
+            st.dataframe(podsumowanie, use_container_width=True)
+        else:
+            st.info("Brak zarejestrowanych uszkodzeń.")
+
+# TAB 6: LOGI / HISTORIA
 with tab_logi:
     st.subheader("📊 Rejestr wykonanych operacji (Google Sheets)")
-    typ_logu = st.selectbox("Wybierz historię do wyświetlenia:", ["Wszystkie Wyjazdy / Logi WZ", "Wszystkie Przyjazdy PZ", "Logi Korekt"])
+    typ_logu = st.selectbox("Wybierz historię do wyświetlenia:", [
+        "Wszystkie Wyjazdy / Logi WZ", 
+        "Wszystkie Przyjazdy PZ", 
+        "Logi Korekt",
+        "Rejestr Uszkodzeń / Złomu"
+    ])
     if typ_logu == "Wszystkie Wyjazdy / Logi WZ":
         st.dataframe(get_data_from_sheet(ID_WYJAZDY), use_container_width=True)
     elif typ_logu == "Wszystkie Przyjazdy PZ":
         st.dataframe(get_data_from_sheet(ID_PRZYJAZDY), use_container_width=True)
-    else:
+    elif typ_logu == "Logi Korekt":
         st.dataframe(get_data_from_sheet(ID_KOREKTY), use_container_width=True)
+    else:
+        st.dataframe(get_data_from_sheet(ID_USZKODZENIA), use_container_width=True)
