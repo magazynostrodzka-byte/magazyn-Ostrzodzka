@@ -182,7 +182,7 @@ def get_wszystkie_materialy_bazy():
     return materialy
 
 # ==========================================
-# GENEROWANIE DOKUMENTU PDF (LOKALNE CZCIONKI)
+# GENEROWANIE DOKUMENTU PDF (LOKALNE CZCIONKI + GODZINA)
 # ==========================================
 def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_bytes=None):
     buffer = io.BytesIO()
@@ -192,14 +192,12 @@ def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_byte
     font_reg = "Roboto-Regular.ttf"
     font_bold = "Roboto-Bold.ttf"
     
-    # Rejestracja czcionek z plików w repozytorium
     if os.path.exists(font_reg) and os.path.exists(font_bold):
         pdfmetrics.registerFont(TTFont('Roboto', font_reg))
         pdfmetrics.registerFont(TTFont('Roboto-Bold', font_bold))
         FONT_NORMAL = 'Roboto'
         FONT_BOLD = 'Roboto-Bold'
     else:
-        # Awaryjnie, gdyby plików z jakiegoś powodu brakowało
         FONT_NORMAL = 'Helvetica'
         FONT_BOLD = 'Helvetica-Bold'
     
@@ -224,7 +222,7 @@ def generate_pdf(nr_dok, z_skad, do_dokad, data_dok, pozycje, signature_img_byte
         [Paragraph("Typ dokumentu:", style_bold), Paragraph("Przewozowy", style_normal)],
         [Paragraph("Przewóz z:", style_bold), Paragraph(z_skad, style_normal)],
         [Paragraph("Przewóz do:", style_bold), Paragraph(do_dokad, style_normal)],
-        [Paragraph("Data:", style_bold), Paragraph(data_dok, style_normal)]
+        [Paragraph("Data i godzina:", style_bold), Paragraph(data_dok, style_normal)]
     ]
     
     meta_table = Table(meta_table_data, colWidths=[120, 375])
